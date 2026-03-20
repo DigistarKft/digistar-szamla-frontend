@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DigiSzámlaAI — Számla Feldolgozó</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #071a10;
+            --bg-mid: #0d2e1f;
+            --bg-light: #1a5c3a;
+            --accent: #00a86b;
+            --accent-dim: rgba(0, 168, 107, 0.15);
+            --accent-border: rgba(0, 168, 107, 0.35);
+            --card-bg: rgba(255, 255, 255, 0.04);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --card-hover: rgba(255, 255, 255, 0.07);
+            --text-primary: #f0f0f0;
+            --text-secondary: #9aac9f;
+            --text-muted: #5a6e60;
+            --danger: #e74c3c;
+            --danger-dim: rgba(231, 76, 60, 0.12);
+            --success: #2ecc71;
+            --success-dim: rgba(46, 204, 113, 0.12);
+            --warning: #f0a030;
+            --warning-dim: rgba(240, 160, 48, 0.12);
+            --radius: 10px;
+            --radius-lg: 14px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', system-ui, sans-serif;
+            background: linear-gradient(175deg, var(--bg-light) 0%, var(--bg-mid) 35%, var(--bg-dark) 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            text-align: center;
+            padding: 36px 20px 28px;
+        }
+        .header img {
+            max-width: 300px;
+            height: auto;
+            margin-bottom: 16px;
+            filter: invert(1);
+            opacity: 0.9;
+        }
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -0.5px;
+            margin-bottom: 2px;
+        }
+        .header h1 span { color: var(--accent); }
+        .header p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+        .version-badge {
+            display: inline-block;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent-border);
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 20px;
+            margin-top: 10px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ─── TENANT BADGE ─── */
+        .tenant-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent-border);
+            border-radius: var(--radius);
+            padding: 10px 18px;
+            margin-top: 12px;
+        }
+        .tenant-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 8px rgba(0, 168, 107, 0.5);
+        }
+        .tenant-badge .name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        /* ─── ERROR/LOADING STATES ─── */
+        .access-error {
+            text-align: center;
+            padding: 60px 24px;
+        }
+        .access-error .icon { font-size: 48px; margin-bottom: 16px; }
+        .access-error h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+        .access-error p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .access-error a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .loading-state {
+            text-align: center;
+            padding: 60px 24px;
+        }
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        /* ─── CARDS ─── */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 14px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            transition: border-color 0.3s;
+        }
+        .card:hover { border-color: rgba(255,255,255,0.12); }
+        .card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .icon {
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-dim);
+            border-radius: 5px;
+            font-size: 10px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .field-group { margin-bottom: 16px; }
+        input[type="text"], select {
+            width: 100%;
+            padding: 11px 14px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius);
+            color: #fff;
+            font-size: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0, 168, 107, 0.1);
+        }
+
+        /* ─── DROPZONE ─── */
+        .dropzone {
+            border: 2px dashed rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius-lg);
+            padding: 40px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .dropzone::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--accent);
+            background: rgba(0, 168, 107, 0.04);
+        }
+        .dropzone:hover::before, .dropzone.dragover::before { opacity: 1; }
+        .dropzone-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .dropzone-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 1;
+        }
+        .dropzone-text strong { color: var(--accent); }
+        .dropzone-hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 6px;
+            position: relative;
+            z-index: 1;
+        }
+        .dropzone.has-file {
+            border-color: var(--accent);
+            border-style: solid;
+            background: var(--accent-dim);
+            padding: 20px 24px;
+        }
+        .file-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .file-preview-icon {
+            width: 42px;
+            height: 42px;
+            background: rgba(0, 168, 107, 0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .file-preview-info { flex: 1; text-align: left; min-width: 0; }
+        .file-preview-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .file-preview-size { font-size: 12px; color: var(--text-secondary); }
+        .file-preview-remove {
+            width: 30px;
+            height: 30px;
+            background: rgba(231, 76, 60, 0.15);
+            border: 1px solid rgba(231, 76, 60, 0.3);
+            border-radius: 8px;
+            color: var(--danger);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .file-preview-remove:hover { background: rgba(231, 76, 60, 0.3); }
+        input[type="file"] { display: none; }
+
+        /* ─── BUTTON ─── */
+        .btn-primary {
+            width: 100%;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, #00905a, #007048);
+            border: 1px solid rgba(0, 168, 107, 0.3);
+            border-radius: var(--radius);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 24px rgba(0, 128, 80, 0.35);
+        }
+        .btn-primary:active:not(:disabled) { transform: translateY(0); }
+        .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* ─── STATUS BAR ─── */
+        .status-bar {
+            display: none;
+            margin-top: 16px;
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .status-bar.visible { display: block; }
+        .status-header {
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid transparent;
+            border-top-color: var(--accent);
+            border-right-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .status-steps {
+            padding: 0 16px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .status-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .status-step.active { color: var(--accent); }
+        .status-step.done { color: var(--text-secondary); }
+        .status-step .step-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .status-step.active .step-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+        .status-step.done .step-dot { background: var(--success); }
+        .status-bar.loading {
+            background: var(--accent-dim);
+            border: 1px solid var(--accent-border);
+        }
+        .status-bar.success {
+            background: var(--success-dim);
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }
+        .status-bar.success .status-header { color: var(--success); }
+        .status-bar.error {
+            background: var(--danger-dim);
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+        .status-bar.error .status-header { color: var(--danger); }
+
+        .result-data { padding: 0 16px 14px; }
+        .result-data pre {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: var(--text-secondary);
+            background: rgba(0,0,0,0.2);
+            padding: 12px;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        /* ─── HISTORY ─── */
+        .history-empty {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .history-item:last-child { border-bottom: none; }
+        .history-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .history-status-dot.ok { background: var(--success); box-shadow: 0 0 6px rgba(46, 204, 113, 0.4); }
+        .history-status-dot.fail { background: var(--danger); box-shadow: 0 0 6px rgba(231, 76, 60, 0.4); }
+        .history-info { flex: 1; min-width: 0; }
+        .history-filename {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            gap: 8px;
+            margin-top: 2px;
+        }
+        .history-http {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .history-http.ok { color: var(--success); background: var(--success-dim); }
+        .history-http.fail { color: var(--danger); background: var(--danger-dim); }
+        .history-count {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: right;
+            padding-top: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 24px 20px;
+            color: var(--text-muted);
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-in {
+            animation: fadeInUp 0.5s ease forwards;
+            opacity: 0;
+        }
+        .delay-1 { animation-delay: 0.08s; }
+        .delay-2 { animation-delay: 0.16s; }
+        .delay-3 { animation-delay: 0.24s; }
+        .delay-4 { animation-delay: 0.32s; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse { animation: pulse 1.5s ease-in-out infinite; }
+
+        @media (max-width: 480px) {
+            body { padding: 12px; }
+            .header { padding: 24px 12px 20px; }
+            .header img { max-width: 220px; }
+            .header h1 { font-size: 22px; }
+            .card { padding: 18px; }
+            .dropzone { padding: 28px 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header animate-in">
+            <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjxzdmcKICAgdmVyc2lvbj0iMS4xIgogICB3aWR0aD0iNy43ODMyMzc1aW4iCiAgIGhlaWdodD0iMC45ODM4MDExOWluIgogICB2aWV3Qm94PSIwIDAgNTYwLjM5NDIxIDcwLjgzMzc3MSIKICAgaWQ9InN2ZzI0IgogICBzb2RpcG9kaTpkb2NuYW1lPSJmZWhlcl9mZWxpcmF0LmNkciIKICAgeG1sbnM6aW5rc2NhcGU9Imh0dHA6Ly93d3cuaW5rc2NhcGUub3JnL25hbWVzcGFjZXMvaW5rc2NhcGUiCiAgIHhtbG5zOnNvZGlwb2RpPSJodHRwOi8vc29kaXBvZGkuc291cmNlZm9yZ2UubmV0L0RURC9zb2RpcG9kaS0wLmR0ZCIKICAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIgogICB4bWxuczpzdmc9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZGVmcwogICAgIGlkPSJkZWZzMjgiIC8+CiAgPHNvZGlwb2RpOm5hbWVkdmlldwogICAgIGlkPSJuYW1lZHZpZXcyNiIKICAgICBwYWdlY29sb3I9IiNmZmZmZmYiCiAgICAgYm9yZGVyY29sb3I9IiMwMDAwMDAiCiAgICAgYm9yZGVyb3BhY2l0eT0iMC4yNSIKICAgICBpbmtzY2FwZTpzaG93cGFnZXNoYWRvdz0iMiIKICAgICBpbmtzY2FwZTpwYWdlb3BhY2l0eT0iMC4wIgogICAgIGlua3NjYXBlOnBhZ2VjaGVja2VyYm9hcmQ9IjAiCiAgICAgaW5rc2NhcGU6ZGVza2NvbG9yPSIjZDFkMWQxIgogICAgIGlua3NjYXBlOmRvY3VtZW50LXVuaXRzPSJpbiIgLz4KICA8cGF0aAogICAgIGQ9Im0gMTkwLjg5ODgsNTkuOTIxMSBoIDE0Ljc0MjUgViAxMS42Nzg2IGggLTE0Ljc0MjUgeiIKICAgICBzdHlsZT0iZmlsbDojMWIxOTE4O2ZpbGwtcnVsZTpldmVub2RkIgogICAgIGlkPSJwYXRoMiIgLz4KICA8cGF0aAogICAgIGQ9Im0gMjg2LjQ1NDIsNTkuOTIxMSBoIDE0Ljc0MjUgViAxMS42Nzg2IGggLTE0Ljc0MjUgeiIKICAgICBzdHlsZT0iZmlsbDojMWIxOTE4O2ZpbGwtcnVsZTpldmVub2RkIgogICAgIGlkPSJwYXRoNCIgLz4KICA8cGF0aAogICAgIGQ9Ik0gNDExLjE0MDYsNTkuOTIxMSBIIDM5Ni40Mjk5IFYgMjMuNTAxNiBoIC0yMC4xODQzIHYgLTExLjgyMyBoIDU1LjA3OTIgdiAxMS44MjMgaCAtMjAuMTg0MiB6IgogICAgIHN0eWxlPSJmaWxsOiMxYjE5MTg7ZmlsbC1ydWxlOmV2ZW5vZGQiCiAgICAgaWQ9InBhdGg2IiAvPgogIDxwYXRoCiAgICAgZD0ibSA0NzAuODk2MSwxMS42Nzk4IGggLTE4Ljc5MTMgbCAtMjYuMzQ0Myw0OC4yNDI1IGggNzAuOTkxOSB6IG0gLTkuNzEzMyw0MC4zOTc2IHYgMCBsIC0xOS4zMjIyLDcuNjM4MiAxMS4wMTEyLC0yMS4xMzYzIC05LjQ0NTQsLTEwLjA2NTQgMTMuMzE3LDAuMDI2MyA1LjMzMjEsLTE2LjM1MTIgNS4zMzE3LDE2LjM1MTIgMTIuMDA1OCwtMC4wMjM2IC04LjcwOTgsMTAuMDYyNyA5LjY4NTgsMjEuMDg2NCB6IgogICAgIHN0eWxlPSJmaWxsOiMxYjE5MTg7ZmlsbC1ydWxlOmV2ZW5vZGQiCiAgICAgaWQ9InBhdGg4IiAvPgogIDxwYXRoCiAgICAgZD0ibSA0NDEuNDcxNiw1OS45MjExIGggMzkuNDc1OCBMIDQ2Mi4yMzExLDQ3LjQyOTcgWiIKICAgICBzdHlsZT0iZmlsbDojZmZmZmZmO2ZpbGwtcnVsZTpldmVub2RkIgogICAgIGlkPSJwYXRoMTAiIC8+CiAgPHBhdGgKICAgICBkPSJtIDE3Ni42NDM5LDE1LjU1MDIgYyAtMy4zNTA1LC0yLjU3NjkgLTguNzA0MiwtMy44NzA0IC0xNi4wNzA2LC0zLjg3MDQgaCAtNDIuMzEzMSB2IDQ4LjI0MjUgaCA0Ni42MjY3IGMgNS44Mjg4LDAgMTAuMDg2MywtMS4yMzkzIDEyLjc2MjYsLTMuNzE2OCAyLjY3NywtMi40NjU2IDQuMDE0NiwtNi4zODE2IDQuMDE0NiwtMTEuNzQ2NCBWIDI3Ljg4MTYgYyAwLC01LjY0MDIgLTEuNjY4NCwtOS43NTQ2IC01LjAyMDIsLTEyLjMzMTQgeiBtIC05LjY4ODUsMjQuNzI5NyB2IDAgYyAwLDIuNzE5OSAtMC43MTk1LDQuNzIyNyAtMi4xNjc5LDUuOTkzOCAtMS40NDgzLDEuMjcyMyAtMy43MzY4LDEuOTE0IC02Ljg2NzMsMS45MTQgSCAxMzIuOTY4OSBWIDIzLjU2OCBoIDIzLjEwMzMgYyAzLjczOTIsMCA2LjQ4MjMsMC42NjQxIDguMjQwMywxLjk5MDYgMS43NTg0LDEuMzI4MSAyLjY0MjksMy40MDcxIDIuNjQyOSw2LjIzNzggeiIKICAgICBzdHlsZT0iZmlsbDojMWIxOTE4O2ZpbGwtcnVsZTpldmVub2RkIgogICAgIGlkPSJwYXRoMTIiIC8+CiAgPHBhdGgKICAgICBkPSJtIDI2MS43MjQ5LDI5LjA4NzkgdiAtMC4xMzM2IGMgMCwtMi4yMjMyIC0wLjY3NTUsLTMuNzQ4OSAtMi4wMTI2LC00LjU3OCAtMS4zMzkyLC0wLjgxNzcgLTQuMzU4NSwtMS4yMjg3IC05LjA3MDEsLTEuMjI4NyBoIC04LjU4MTcgYyAtNS4wNDMzLDAgLTguMjYxNSwwLjYwODYgLTkuNjc2OCwxLjgxNDUgLTEuNDE1NCwxLjIxNTggLTIuMTIzOCwzLjc3MjIgLTIuMTIzOCw3LjY4NjYgdiA2LjcwMTkgYyAwLDMuNDgzOCAwLjc5NzIsNS44NjEgMi4zOTkyLDcuMTU1NyAxLjU5MjYsMS4yOTUxIDQuNzU2MSwxLjk0NjYgOS40NTY4LDEuOTQ2NiBoIDguNTI2MyBjIDQuMjM2NiwwIDcuMTQ1NSwtMC4zODcgOC43NDgyLC0xLjE1MDUgMS42MDM2LC0wLjc2MjcgMi40MDA5LC0yLjA5MDggMi40MDA5LC0zLjk1ODggMCwtMC4yNjQ4IC0wLjA0NDQsLTAuNjk1OSAtMC4xMzMyLC0xLjI5NDcgMCwtMC4wNjY0IDAsLTAuMTIwNiAwLC0wLjE2NTQgaCAtMTcuMzMgdiAtOS43NTQ2IGggMzIuNjU4MyB2IDE1LjgzNzYgYyAwLDQuNTM0MSAtMS42ODA5LDcuNzY0IC01LjA0MjUsOS42NzY4IC0zLjM1MTcsMS45MTI4IC05LjIwMTcsMi44NjUzIC0xNy41NDEsMi44NjUzIGggLTE2LjQwMTQgYyAtNS4wMzE2LDAgLTguNzQ4MywtMC4yNjYxIC0xMS4xMzYyLC0wLjgwODMgLTIuNDAxMiwtMC41NDIzIC00LjQzNjIsLTEuNDU5NCAtNi4wOTM2LC0yLjc1MjkgLTEuOTQ4MiwtMS41MzkxIC0zLjM2MzIsLTMuNDE4NSAtNC4yNDczLC01LjY1MjggLTAuODg0OSwtMi4yMzMgLTEuMzI4MSwtNS4wNjQ5IC0xLjMyODEsLTguNDcwOCBWIDI5LjY2MzIgYyAwLC02LjkxMjkgMS42MzY2LC0xMS43MzM4IDQuOTExMywtMTQuNDY2MyAzLjI3MjgsLTIuNzMyNCA5LjIxMjcsLTQuMTAzNCAxNy44Mjc0LC00LjEwMzQgaCAxNi40Njc5IGMgNS4zMDk0LDAgOS4yMzQ4LDAuMjMzIDExLjc1NjIsMC43MDgxIDIuNTMyOSwwLjQ3NDYgNC41MjMxLDEuMjgyOSA1Ljk3MTksMi40IDEuNTA1MywxLjE3MSAyLjYyMjgsMi43NDE1IDMuMzUxNyw0LjcyMjcgMC43MTk1LDEuOTc5NiAxLjA4NDUsNC40NTYzIDEuMDg0NSw3LjQ0MjYgMCwwLjcwNzYgLTAuMDExOCwxLjI2MDkgLTAuMDIyNCwxLjY0NzkgLTAuMDExOCwwLjM4NjcgLTAuMDIyNCwwLjc0MDcgLTAuMDQ0OCwxLjA3MzEgeiIKICAgICBzdHlsZT0iZmlsbDojMWIxOTE4O2ZpbGwtcnVsZTpldmVub2RkIgogICAgIGlkPSJwYXRoMTQiIC8+CiAgPHBhdGgKICAgICBkPSJtIDMxMS4wMTc3LDQzLjg4MzUgMTQuNTQyMSwtMC4wMzMgdiAwLjg3MzEgYyAwLDEuODE0NiAwLjQ0NDEsMy4wNDMzIDEuMzI4MiwzLjY4MzQgMC44ODQ0LDAuNjMxIDIuNzQzLDAuOTUyNCA1LjU3MzcsMC45NTI0IGggMTguNTAzMyBjIDEuODI0LDAgMy4xMTg3LC0wLjMxMDggMy44OTI0LC0wLjkzIDAuNzg1OSwtMC42MDcxIDEuMTcyMSwtMS42MjY0IDEuMTcyMSwtMy4wNTI4IDAsLTEuNDQ4MyAtMC40NTI2LC0yLjQ4OCAtMS4zNDgxLC0zLjExODcgLTAuODk3MSwtMC42MTgxIC0yLjgyMTMsLTEuMDM5NyAtNS43ODUyLC0xLjI2MDUgbCAtMjMuMTM2NCwtMC41MTk1IGMgLTUuNzk2MSwtMC4xNjU4IC05LjcxMDIsLTEuMjcyNyAtMTEuNzQ1NiwtMy4zMDczIC0yLjA0NTYsLTIuMDIzNiAtMy4wNjMzLC01LjcxOCAtMy4wNjMzLC0xMS4wODExIDAsLTIuNzY1OSAwLjI2NjQsLTUuMDQyNiAwLjgwNjcsLTYuODM1OSAwLjU0MjMsLTEuNzkwNiAxLjQwNTksLTMuMjgzIDIuNTk5MywtNC40NjY5IDEuNDA0MywtMS4zMzc2IDMuMjQwNSwtMi4yOTA4IDUuNTA4OSwtMi44NTQzIDIuMjY2MSwtMC41NjI3IDUuOTYwMSwtMC44NDAxIDExLjA2OTgsLTAuODQwMSBoIDIyLjQ5NTEgYyA1LjU3NDksMCA5LjU4OTUsMS4wMTczIDEyLjAzMzYsMy4wNDA5IDIuNDU0NywyLjAzNTQgMy42ODI2LDUuMzMxOCAzLjY4MjYsOS44ODgyIDAsMC4yOTc5IC0wLjAxMjIsMC42MTkzIC0wLjAyMTYsMC45NzI5IC0wLjAxMTQsMC4zNDIzIC0wLjA0NDgsMC45MDY5IC0wLjExMDgsMS42ODE4IGggLTE0LjE4ODkgdiAtMC4xOTk2IGMgMCwtMS41OTM0IC0wLjQwOTQsLTIuNzg2NyAtMS4yMTc3LC0zLjU5NSAtMC44MDY3LC0wLjc5NTMgLTIuMDI0LC0xLjE5NDUgLTMuNjQ5NiwtMS4xOTQ1IGggLTE2Ljk3NjcgYyAtMi44MzA3LDAgLTQuNzAwNywwLjI3NyAtNS42MDcyLDAuODQxMyAtMC45MDYxLDAuNTYzOSAtMS4zNTk1LDEuNTQ4NSAtMS4zNTk1LDIuOTUyNSAwLDEuMzgyIDAuNDA4NiwyLjM3ODQgMS4yMjYzLDIuOTk2OSAwLjgzMDcsMC42MTk3IDIuMzM0NCwxLjAwNjcgNC41NDU5LDEuMTgzOSBsIDI0LjI0MjQsMC4zODY3IGMgNS41MzE0LDAuMTU1NiA5LjQyMjYsMS4zOTMzIDExLjY3OTIsMy43MjczIDIuMjU2NywyLjMzMjkgMy4zODQ4LDYuMzE1NyAzLjM4NDgsMTEuOTU1OSAwLDMuMzUwMSAtMC40MjA1LDUuOTM4OCAtMS4yNDg4LDcuNzc0MiAtMC44MzAyLDEuODM2MiAtMi4yMzUsMy40MDcxIC00LjE5MzgsNC42OTk5IC0xLjI5MjcsMC44MiAtMy4wNjMzLDEuNDA1OSAtNS4yODUzLDEuNzcwOSAtMi4yMjM2LDAuMzUzMyAtNS40NDE4LDAuNTMwNSAtOS42NTQ0LDAuNTMwNSBoIC0xOS42NDI0IGMgLTguMDUxMywwIC0xMy40Mzc2LC0wLjkwNzcgLTE2LjE3MDEsLTIuNzEwMSAtMi43MTk1LC0xLjgwMTYgLTQuMDgwNiwtNS4xNjUxIC00LjA4MDYsLTEwLjA4NTggMCwtMC4yODg0IDAuMDIxNiwtMC43NTI1IDAuMDU1OCwtMS40MTUgMC4wMzMsLTAuNjUzNCAwLjA3NywtMS40NjAxIDAuMTQzOCwtMi40MTI2IHoiCiAgICAgc3R5bGU9ImZpbGw6IzFiMTkxODtmaWxsLXJ1bGU6ZXZlbm9kZCIKICAgICBpZD0icGF0aDE2IiAvPgogIDxwYXRoCiAgICAgZD0ibSA1NTIuNDI2MSw0MC44NjYyIGMgMi44ODczLC0wLjY4NjUgNC45NTQ1LC0yLjA0NjEgNi4xODI0LC00LjA4MDcgMS4wMDU5LC0xLjY1NzggMS42MDI0LC00LjA0MjEgMS43ODU1LC03LjEzNDUgdiAtNC4yNTM1IGMgLTAuMjkzOSwtNC44ODEgLTEuNjU1OCwtOC4zMTggLTQuMDg1NywtMTAuMzExOCAtMi43NjQ3LC0yLjI2NiAtNy45NjI4LC0zLjQwNTkgLTE1LjYxNiwtMy40MDU5IGggLTM4Ljc1MjQgdiA0OC4yNDI1IGggMTQuNzc0NyBWIDQ3LjU3OSBoIDIxLjk3NTMgYyAyLjYzMjYsMCA0LjQwMTYsMC4zNTQxIDUuMjk4NywxLjA3MTYgMC44OTUxLDAuNzA4OCAxLjMzNzIsMi4wMTQ2IDEuMzM3MiwzLjkxNjQgdiA3LjM1NTMgaCAxNC43NDI1IHYgLTkuODc2OCBjIDAsLTIuNDQ0MSAtMC42NDI1LC00LjQzNTggLTEuOTEzNiwtNS45NzMgLTEuMjcyNCwtMS41MjYyIC0zLjE4NTIsLTIuNTk3NyAtNS43Mjg2LC0zLjIwNjMgeiBtIC04LjE1MDcsLTYuNzQ2NyB2IDAgYyAtMC43ODY2LDAuOTE3OSAtMi4xNjc4LDEuMzcxMyAtNC4xMzY4LDEuMzcxMyBoIC0yMy40MjQgdiAtMTEuNzkgaCAyMy40MjQgYyAxLjg1NzgsMCAzLjIxODksMC40MzExIDQuMDU5LDEuMjk0NyAwLjgzOTcsMC44NjIxIDEuMjYxNywyLjI0NiAxLjI2MTcsNC4xNDc4IDAsMi4zOTkzIC0wLjM5OTIsNC4wNTgzIC0xLjE4MzksNC45NzYyIHoiCiAgICAgc3R5bGU9ImZpbGw6IzFiMTkxODtmaWxsLXJ1bGU6ZXZlbm9kZCIKICAgICBpZD0icGF0aDE4IiAvPgogIDxwYXRoCiAgICAgZD0iTSA2Ni4yNzE4LDAgSCAzOC42ODA5IEwgMCw3MC44MzM4IEggMTA0LjIzNjIgWiBNIDUyLjAwOTksNTkuMzE1MiB2IDAgTCAyMy42Mzk1LDcwLjUzMDMgMzkuODA3MSwzOS40OTYxIDI1LjkzODYsMjQuNzE3MyA0NS40OTE2LDI0Ljc1NTkgNTMuMzIwNywwLjc0NzcgNjEuMTQ5MiwyNC43NTU5IDc4Ljc3NywyNC43MjEzIDY1Ljk4ODYsMzkuNDk2MSA4MC4yMTAxLDcwLjQ1NyBaIgogICAgIHN0eWxlPSJmaWxsOiMxYjE5MTg7ZmlsbC1ydWxlOmV2ZW5vZGQiCiAgICAgaWQ9InBhdGgyMCIgLz4KICA8cGF0aAogICAgIGQ9Ik0gMjMuMDY4Myw3MC44MzIgSCA4MS4wMyBMIDUzLjU0OTIsNTIuNDkxMSBaIgogICAgIHN0eWxlPSJmaWxsOiNmZmZmZmY7ZmlsbC1ydWxlOmV2ZW5vZGQiCiAgICAgaWQ9InBhdGgyMiIgLz4KPC9zdmc+Cg==" alt="DigiStar">
+            <h1>Digi<span>Számla</span>AI</h1>
+            <p>Intelligens számlafeldolgozás</p>
+            <div class="version-badge">SaaS v3.0</div>
+        </div>
+
+        <!-- Loading State (shown while verifying token) -->
+        <div class="card animate-in delay-1" id="loadingCard" style="display:none">
+            <div class="loading-state">
+                <div class="loading-spinner"></div>
+                <p style="color: var(--text-secondary)">Hozzáférés ellenőrzése...</p>
+            </div>
+        </div>
+
+        <!-- Access Error (shown if token invalid) -->
+        <div class="card animate-in delay-1" id="errorCard" style="display:none">
+            <div class="access-error">
+                <div class="icon">🔒</div>
+                <h2>Érvénytelen hozzáférés</h2>
+                <p>Ez a link nem érvényes vagy lejárt.<br>
+                Kérjük, forduljon a DigiStar ügyfélszolgálathoz:<br>
+                <a href="mailto:support@digistar.hu">support@digistar.hu</a></p>
+            </div>
+        </div>
+
+        <!-- Upload Card (shown after successful token verification) -->
+        <div class="card animate-in delay-1" id="uploadCard" style="display:none">
+            <div class="card-title">
+                <div class="icon">↑</div>
+                Számla feltöltés
+            </div>
+
+            <!-- Tenant name badge (no dropdown!) -->
+            <div style="text-align:center; margin-bottom: 20px;">
+                <div class="tenant-badge">
+                    <span class="dot"></span>
+                    <span class="name" id="tenantName">—</span>
+                </div>
+            </div>
+
+            <div class="dropzone" id="dropzone" onclick="document.getElementById('pdfFile').click()">
+                <div class="dropzone-icon">📄</div>
+                <div class="dropzone-text">Húzd ide a számlát vagy <strong>kattints a tallózáshoz</strong></div>
+                <div class="dropzone-hint">Csak PDF fájlok • Max. 10 MB</div>
+            </div>
+            <input type="file" id="pdfFile" accept=".pdf">
+
+            <button class="btn-primary" onclick="sendInvoice()" id="sendBtn" disabled>
+                <span id="btnIcon">↑</span>
+                <span id="btnText">Számla feltöltése</span>
+            </button>
+
+            <!-- Status Bar -->
+            <div class="status-bar" id="statusBar">
+                <div class="status-header" id="statusHeader">
+                    <div class="status-spinner" id="statusSpinner"></div>
+                    <span id="statusText">Feldolgozás...</span>
+                </div>
+                <div class="status-steps" id="statusSteps">
+                    <div class="status-step" id="step-upload">
+                        <span class="step-dot"></span>
+                        PDF feltöltés
+                    </div>
+                    <div class="status-step" id="step-ai">
+                        <span class="step-dot"></span>
+                        AI feldolgozás (Claude / Gemini)
+                    </div>
+                    <div class="status-step" id="step-sheets">
+                        <span class="step-dot"></span>
+                        Google Sheets mentés
+                    </div>
+                </div>
+                <div class="result-data" id="resultData" style="display:none">
+                    <pre id="resultPre"></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Card -->
+        <div class="card animate-in delay-2" id="historyCard" style="display:none">
+            <div class="card-title">
+                <div class="icon">⏱</div>
+                Korábbi feltöltések
+            </div>
+            <div id="historyList">
+                <div class="history-empty" id="historyEmpty">Még nincs feltöltés ebben a munkamenetben</div>
+            </div>
+            <div class="history-count" id="historyCount" style="display:none"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer animate-in delay-4">
+            DigiSzámlaAI SaaS v3.0 · DigiStar Kft. · AI-alapú számlafeldolgozás
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════
+        // DigiSzámlaAI v3.0 — Token-alapú hozzáférés
+        // ═══════════════════════════════════════════════════════
+
+        // ─── CONFIG ───
+        // FONTOS: A webhook URL-t az on-prem n8n-re kell állítani!
+        const WEBHOOK_BASE = 'https://ai-n8n-node1.digistar.hu/webhook';
+        const UPLOAD_URL = WEBHOOK_BASE + '/szamla-feldolgozo-v2';
+        const LOOKUP_URL = WEBHOOK_BASE + '/szamla-lookup';
+
+        // ─── STATE ───
+        let selectedFile = null;
+        let uploadHistory = [];
+        let clientToken = null;
+        let clientName = null;
+        let clientId = null;
+
+        // ─── INIT: Token kiolvasás URL-ből ───
+        async function init() {
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('t');
+
+            if (!token) {
+                showAccessError();
+                return;
+            }
+
+            clientToken = token;
+            showLoading();
+
+            try {
+                // Token lookup — az n8n visszaadja az ügyfél adatait
+                const response = await fetch(LOOKUP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ form_token: token })
+                });
+
+                if (!response.ok) {
+                    showAccessError();
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (!data.client_name || !data.client_id) {
+                    showAccessError();
+                    return;
+                }
+
+                // Sikeres azonosítás
+                clientName = data.client_name;
+                clientId = data.client_id;
+                showUploadUI();
+
+            } catch (err) {
+                console.error('Lookup error:', err);
+                showAccessError();
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('loadingCard').style.display = 'block';
+            document.getElementById('errorCard').style.display = 'none';
+            document.getElementById('uploadCard').style.display = 'none';
+            document.getElementById('historyCard').style.display = 'none';
+        }
+
+        function showAccessError() {
+            document.getElementById('loadingCard').style.display = 'none';
+            document.getElementById('errorCard').style.display = 'block';
+            document.getElementById('uploadCard').style.display = 'none';
+            document.getElementById('historyCard').style.display = 'none';
+        }
+
+        function showUploadUI() {
+            document.getElementById('loadingCard').style.display = 'none';
+            document.getElementById('errorCard').style.display = 'none';
+            document.getElementById('uploadCard').style.display = 'block';
+            document.getElementById('historyCard').style.display = 'block';
+            document.getElementById('tenantName').textContent = clientName;
+        }
+
+        // ─── ELEMENTS (after DOM ready) ───
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('pdfFile');
+        const sendBtn = document.getElementById('sendBtn');
+        const btnText = document.getElementById('btnText');
+        const btnIcon = document.getElementById('btnIcon');
+        const statusBar = document.getElementById('statusBar');
+
+        // ─── DRAG & DROP ───
+        ['dragenter', 'dragover'].forEach(evt => {
+            dropzone.addEventListener(evt, e => {
+                e.preventDefault();
+                dropzone.classList.add('dragover');
+            });
+        });
+        ['dragleave', 'drop'].forEach(evt => {
+            dropzone.addEventListener(evt, e => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+            });
+        });
+        dropzone.addEventListener('drop', e => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files[0]) handleFile(fileInput.files[0]);
+        });
+
+        // ─── FILE HANDLING ───
+        function handleFile(file) {
+            if (file.type !== 'application/pdf') {
+                showQuickError('Csak PDF fájlok elfogadottak.');
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                showQuickError('A fájl mérete meghaladja a 10 MB-ot.');
+                return;
+            }
+            selectedFile = file;
+            renderFilePreview();
+            updateSendButton();
+        }
+
+        function renderFilePreview() {
+            if (!selectedFile) {
+                dropzone.classList.remove('has-file');
+                dropzone.innerHTML = `
+                    <div class="dropzone-icon">📄</div>
+                    <div class="dropzone-text">Húzd ide a számlát vagy <strong>kattints a tallózáshoz</strong></div>
+                    <div class="dropzone-hint">Csak PDF fájlok • Max. 10 MB</div>
+                `;
+                dropzone.onclick = () => fileInput.click();
+                return;
+            }
+            dropzone.classList.add('has-file');
+            const sizeMB = (selectedFile.size / 1024 / 1024).toFixed(2);
+            dropzone.innerHTML = `
+                <div class="file-preview">
+                    <div class="file-preview-icon">📄</div>
+                    <div class="file-preview-info">
+                        <div class="file-preview-name">${escHtml(selectedFile.name)}</div>
+                        <div class="file-preview-size">${sizeMB} MB</div>
+                    </div>
+                    <button class="file-preview-remove" onclick="event.stopPropagation(); removeFile()" title="Eltávolítás">✕</button>
+                </div>
+            `;
+            dropzone.onclick = null;
+        }
+
+        function removeFile() {
+            selectedFile = null;
+            fileInput.value = '';
+            renderFilePreview();
+            updateSendButton();
+        }
+
+        function updateSendButton() {
+            // Nincs dropdown — csak a fájl kell
+            sendBtn.disabled = !selectedFile;
+        }
+
+        // ─── STATUS MANAGEMENT ───
+        function setStatus(state, text) {
+            statusBar.className = 'status-bar visible ' + state;
+            document.getElementById('statusText').textContent = text;
+            const spinner = document.getElementById('statusSpinner');
+            spinner.style.display = state === 'loading' ? 'block' : 'none';
+        }
+
+        function setStep(stepId, state) {
+            const el = document.getElementById('step-' + stepId);
+            el.className = 'status-step ' + state;
+        }
+
+        function resetSteps() {
+            ['upload', 'ai', 'sheets'].forEach(id => setStep(id, ''));
+            document.getElementById('resultData').style.display = 'none';
+            document.getElementById('statusSteps').style.display = 'flex';
+        }
+
+        // ─── SEND INVOICE ───
+        async function sendInvoice() {
+            if (!selectedFile || !clientToken) return;
+
+            // Lock UI
+            sendBtn.disabled = true;
+            btnText.textContent = 'Küldés folyamatban...';
+            btnIcon.innerHTML = '<span class="pulse">◉</span>';
+
+            // Init status
+            resetSteps();
+            setStatus('loading', 'Számla feldolgozás indítása...');
+            setStep('upload', 'active');
+
+            const startTime = Date.now();
+
+            const formData = new FormData();
+            formData.append('form_token', clientToken);
+            formData.append('file', selectedFile);
+
+            try {
+                await sleep(300);
+                setStep('upload', 'done');
+                setStep('ai', 'active');
+                setStatus('loading', 'AI feldolgozás — Claude API...');
+
+                const response = await fetch(UPLOAD_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                setStep('ai', 'done');
+                setStep('sheets', 'active');
+                setStatus('loading', 'Google Sheets mentés...');
+                await sleep(200);
+                setStep('sheets', 'done');
+
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                const text = await response.text();
+                let json;
+                try { json = JSON.parse(text); } catch(e) { json = null; }
+
+                if (response.ok) {
+                    setStatus('success', `Sikeres feldolgozás — ${elapsed}s`);
+                } else {
+                    setStatus('error', `Hiba — HTTP ${response.status} — ${elapsed}s`);
+                }
+
+                const resultData = document.getElementById('resultData');
+                const resultPre = document.getElementById('resultPre');
+                resultPre.textContent = json ? JSON.stringify(json, null, 2) : text;
+                resultData.style.display = 'block';
+
+                addHistory({
+                    filename: selectedFile.name,
+                    tenant: clientName,
+                    status: response.ok ? 'ok' : 'fail',
+                    httpCode: response.status,
+                    elapsed: elapsed,
+                    time: new Date()
+                });
+
+            } catch (err) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                setStatus('error', `Hálózati hiba — ${elapsed}s`);
+                setStep('upload', 'done');
+                setStep('ai', '');
+                setStep('sheets', '');
+
+                const resultData = document.getElementById('resultData');
+                const resultPre = document.getElementById('resultPre');
+                resultPre.textContent = err.message;
+                resultData.style.display = 'block';
+
+                addHistory({
+                    filename: selectedFile.name,
+                    tenant: clientName,
+                    status: 'fail',
+                    httpCode: 'ERR',
+                    elapsed: elapsed,
+                    time: new Date()
+                });
+            }
+
+            // Unlock UI
+            sendBtn.disabled = false;
+            btnText.textContent = 'Számla feltöltése';
+            btnIcon.textContent = '↑';
+            removeFile();
+        }
+
+        // ─── HISTORY ───
+        function addHistory(item) {
+            uploadHistory.unshift(item);
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const list = document.getElementById('historyList');
+            const empty = document.getElementById('historyEmpty');
+            const count = document.getElementById('historyCount');
+
+            if (uploadHistory.length === 0) {
+                empty.style.display = 'block';
+                count.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            count.style.display = 'block';
+            count.textContent = `${uploadHistory.length} feltöltés`;
+
+            let html = '';
+            uploadHistory.forEach(h => {
+                const timeStr = h.time.toLocaleString('hu-HU', {
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                });
+                html += `
+                    <div class="history-item">
+                        <div class="history-status-dot ${h.status}"></div>
+                        <div class="history-info">
+                            <div class="history-filename">${escHtml(h.filename)}</div>
+                            <div class="history-meta">
+                                <span>${h.tenant}</span>
+                                <span>·</span>
+                                <span>${timeStr}</span>
+                                <span>·</span>
+                                <span>${h.elapsed}s</span>
+                            </div>
+                        </div>
+                        <div class="history-http ${h.status}">${h.httpCode}</div>
+                    </div>
+                `;
+            });
+            list.innerHTML = `<div class="history-empty" id="historyEmpty" style="display:none">Még nincs feltöltés ebben a munkamenetben</div>` + html;
+        }
+
+        // ─── UTILS ───
+        function escHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        }
+
+        function showQuickError(msg) {
+            resetSteps();
+            document.getElementById('statusSteps').style.display = 'none';
+            setStatus('error', msg);
+            setTimeout(() => {
+                statusBar.classList.remove('visible');
+            }, 3000);
+        }
+
+        // ─── STARTUP ───
+        init();
+    </script>
+</body>
+</html>
