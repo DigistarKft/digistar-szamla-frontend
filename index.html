@@ -616,7 +616,6 @@
         // ═══════════════════════════════════════════════════════
 
         // ─── CONFIG ───
-        // FONTOS: A webhook URL-t az on-prem n8n-re kell állítani!
         const WEBHOOK_BASE = 'https://ai-n8n-node1.digistar.hu/webhook';
         const UPLOAD_URL = WEBHOOK_BASE + '/szamla-feldolgozo-v2';
         const LOOKUP_URL = WEBHOOK_BASE + '/szamla-lookup';
@@ -642,11 +641,12 @@
             showLoading();
 
             try {
-                // Token lookup — az n8n visszaadja az ügyfél adatait
+                // Token lookup — FormData-val (CORS preflight elkerülése)
+                const formData = new FormData();
+                formData.append('form_token', token);
                 const response = await fetch(LOOKUP_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ form_token: token })
+                    body: formData
                 });
 
                 if (!response.ok) {
@@ -772,7 +772,6 @@
         }
 
         function updateSendButton() {
-            // Nincs dropdown — csak a fájl kell
             sendBtn.disabled = !selectedFile;
         }
 
